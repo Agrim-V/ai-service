@@ -7,14 +7,15 @@ from services.pull_requests import PullRequestService
 
 router = APIRouter(
     prefix="",
-    tags=["PullRequest", "PR"],
+    tags=["PullRequest"],
 )
 
 
-@router.post("/pr/{pr-id}/review")
+@router.post("/pr/review")
 @inject
 async def review_code(
-    pr_id: Annotated[str, Path(title="The ID of pull request to be reviewed")],
+    pr_number: int,
+    owner: str, repo: str, github_token: str,
     pr_service: PullRequestService = Depends(Provide[Container.pr_service]),
 ):
-    return pr_service.review_code(pr_id=pr_id)
+    return pr_service.review_code(owner, repo, pr_number, github_token)
