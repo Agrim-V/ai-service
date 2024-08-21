@@ -14,7 +14,7 @@ class GithubRetriever:
         self.gh = login(token=github_token)
         self.repo = self.gh.repository(owner, repo_name)
         self.pull_request = self.repo.pull_request(pr_number)
-        self.commented_lines = set()  # Store already commented lines
+        self.commented_lines = set()
 
     def get_pr_details(self):
         files_changed = [file for file in self.pull_request.files()]
@@ -29,7 +29,7 @@ class GithubRetriever:
     
     def add_commented_line(self, file_path, line_number):
         self.commented_lines.add((file_path, line_number))
-    
+
 class PRSummaryChain:
     def __init__(self, code_summary_llm, pr_summary_llm):
         self.code_summary_llm = code_summary_llm
@@ -75,17 +75,16 @@ class CodeReviewChain:
                     Here's the code diff:{code_diff}
                     """)
             ).run(code_diff=file.patch)
-            # Split the review into individual line-based comments
             for i, line in enumerate(review.splitlines()):
                 if line.strip():
                     comments = [{
                         "file_path": file.filename,
-                        "line_number": i + 1,  # Adjust the line number to be accurate
+                        "line_number": i + 1,
                         "comment": line.strip()
                     }]
                     code_reviews.append({"file_path": file.filename, "comments": comments})
         return {"code_reviews": code_reviews}
-    
+
 class PullRequestReporter:
     def __init__(self, pr_summary, code_summaries, pull_request, code_reviews):
         self.pr_summary = pr_summary
@@ -104,11 +103,15 @@ class PullRequestReporter:
         return report
 
 class PullRequestService:
-    def __init__(self, owner, repo, pr_number, github_token):
+    def __init__(self, owner: str, repo: str, pr_number: int, github_token: str,
+                 code_summary_llm: BaseChatModel, pr_summary_llm: BaseChatModel, review_llm: BaseChatModel):
         self.owner = owner
         self.repo = repo
         self.pr_number = pr_number
         self.github_token = github_token
+        self.code_summary_llm = code_summary_llm
+        self.pr_summary_llm = pr_summary_llm
+        self.review_llm = review_llm
 
     def review_code(self):
         retriever = GithubRetriever(self.github_token, self.owner, self.repo, self.pr_number)
@@ -122,10 +125,12 @@ class PullRequestService:
             pr_summary_llm=load_gpt_llm()
         )
         summary = pr_summary_chain.run(pr_details)
+        print("pr_details: {pr_details}")
 
         # Initialize and run the code review chain
         code_review_chain = CodeReviewChain(llm=load_gpt_llm())
         reviews = code_review_chain.run(pr_details)
+        print("reviews: {reviews}")
         # Generate the final report
         reporter = PullRequestReporter(
             pr_summary=summary["pr_summary"],
@@ -148,7 +153,6 @@ class PullRequestService:
                 )
                 retriever.add_commented_line(file_path, line_number)
         return reporter.report()
-        pass
 
 @lru_cache(maxsize=1)
 def load_gpt_llm() -> BaseChatModel:
