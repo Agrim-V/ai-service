@@ -1,4 +1,4 @@
-from github3 import login
+from github import Github
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain.chat_models.base import BaseChatModel
@@ -8,32 +8,10 @@ from dotenv import load_dotenv
 import os, re
 
 from infrastructure.github.git_retriever import GithubRetriever
+from infrastructure.repositories.llm.pr_summary import PRSummaryChain
+from infrastructure.models.prompts import CODE_REVIEW_PROMPT
 
 load_dotenv('/Users/qoala/Desktop/services/ai-service/.env')
-
-class PRSummaryChain:
-    def __init__(self, code_summary_llm, pr_summary_llm):
-        self.code_summary_llm = code_summary_llm
-        self.pr_summary_llm = pr_summary_llm
-
-    def run(self, pr_details):
-        code_summaries = []
-        for file in pr_details['files_changed']:
-            summary = LLMChain(
-                llm=self.code_summary_llm,
-                prompt=PromptTemplate.from_template("Summarize the following code changes:\n{code_diff}")
-            ).run(code_diff=file.patch)
-            code_summaries.append(summary)
-        
-        pr_summary = LLMChain(
-            llm=self.pr_summary_llm,
-            prompt=PromptTemplate.from_template("Summarize this pull request:\n{description}")
-        ).run(description=pr_details['description'])
-
-        return {
-            "pr_summary": pr_summary,
-            "code_summaries": code_summaries
-        }
 
 class CodeReviewChain:
     def __init__(self, llm):
@@ -44,18 +22,7 @@ class CodeReviewChain:
         for file in pr_details['files_changed']:
             review = LLMChain(
                 llm=self.llm,
-                prompt=PromptTemplate.from_template(
-                    """Your task is to review pull requests. Instructions:
-                    - Do not give positive comments or compliments.
-                    - Provide comments and suggestions ONLY if there is something to improve, otherwise return an empty array.
-                    - Provide conceptual knowledge in the comments if necessary.
-                    - Ensure endpoints follow RESTful architecture.
-                    - Write the comment in GitHub Markdown format.
-                    - For each comment, include the specific line number in the code diff that the comment applies to in the format `Line <line_number>: <comment>`.
-
-                    Here's the code diff:
-                    {code_diff}
-                    """)
+                prompt=CODE_REVIEW_PROMPT
             ).run(code_diff=file.patch)
 
             for line in review.splitlines():
@@ -132,6 +99,7 @@ class PullRequestService:
             pull_request=retriever.pull_request,
             code_reviews=reviews["code_reviews"]
         )
+        print(reporter.report())
         # Optionally, post comments inline
         for review in reviews["code_reviews"]:
             for comment in review["comments"]:

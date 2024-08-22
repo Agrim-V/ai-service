@@ -7,7 +7,7 @@ class Container(containers.DeclarativeContainer):
     # LLM Providers
     code_summary_llm = providers.Singleton(load_gpt_llm)
     pr_summary_llm = providers.Singleton(load_gpt_llm)
-    review_llm = providers.Singleton(load_gpt4_llm)
+    review_llm = providers.Singleton(load_gpt_llm)
 
     # Services
     pr_service = providers.Factory(
