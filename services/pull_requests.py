@@ -5,7 +5,7 @@ from langchain.chat_models.base import BaseChatModel
 from langchain.chat_models import ChatOpenAI
 from functools import lru_cache
 from dotenv import load_dotenv
-import os
+import os, re
 
 load_dotenv('/Users/qoala/Desktop/services/ai-service/.env')
 
@@ -67,20 +67,29 @@ class CodeReviewChain:
                     """Your task is to review pull requests. Instructions:
                     - Do not give positive comments or compliments.
                     - Provide comments and suggestions ONLY if there is something to improve, otherwise return an empty array.
-                    - Provide conceptual knowledge in the comments if necessary. 
-                    - Ensure endpoints follow RESTful architecture. 
-                    - Write the comment in GitHub Markdown format. 
-                    - Use the given description only for the overall context and only comment the code.
-                    
-                    Here's the code diff:{code_diff}
+                    - Provide conceptual knowledge in the comments if necessary.
+                    - Ensure endpoints follow RESTful architecture.
+                    - Write the comment in GitHub Markdown format.
+                    - For each comment, include the specific line number in the code diff that the comment applies to in the format `Line <line_number>: <comment>`.
+
+                    Here's the code diff:
+                    {code_diff}
                     """)
             ).run(code_diff=file.patch)
-            for i, line in enumerate(review.splitlines()):
-                if line.strip():
+
+            for line in review.splitlines():
+                pattern = r'^- Line (\d+): (.*)$'
+    
+                match = re.match(pattern, line)
+                if match:
+                    # Extract line number and comment from the match
+                    line_number = int(match.group(1))
+                    comment = match.group(2)
+
                     comments = [{
                         "file_path": file.filename,
-                        "line_number": i + 1,
-                        "comment": line.strip()
+                        "line_number": line_number,
+                        "comment": comment.strip()
                     }]
                     code_reviews.append({"file_path": file.filename, "comments": comments})
         return {"code_reviews": code_reviews}
@@ -98,8 +107,12 @@ class PullRequestReporter:
         for summary in self.code_summaries:
             report += f"{summary}\n\n"
         report += "### Code Reviews\n\n"
+        print(self.code_reviews)
         for review in self.code_reviews:
-            report += f"Line number: {review['comments'][0]['line_number']}\nComment:{review['comments'][0]['comment']}\n\n"
+            for comment in review['comments']:
+                line_number = comment['line_number']
+                comment_text = comment['comment']
+                report += f"Line number: {line_number}\nComment: {comment_text}\n\n"
         return report
 
 class PullRequestService:
@@ -117,7 +130,7 @@ class PullRequestService:
         retriever = GithubRetriever(self.github_token, self.owner, self.repo, self.pr_number)
         pr_details = retriever.get_pr_details()
 
-        print(f"PR Details: {pr_details}.")
+        print(pr_details)
 
         # Initialize and run the summary chain
         pr_summary_chain = PRSummaryChain(
@@ -125,12 +138,12 @@ class PullRequestService:
             pr_summary_llm=load_gpt_llm()
         )
         summary = pr_summary_chain.run(pr_details)
-        print("pr_details: {pr_details}")
+        print(summary)
 
         # Initialize and run the code review chain
         code_review_chain = CodeReviewChain(llm=load_gpt_llm())
         reviews = code_review_chain.run(pr_details)
-        print("reviews: {reviews}")
+        print(reviews)
         # Generate the final report
         reporter = PullRequestReporter(
             pr_summary=summary["pr_summary"],
