@@ -6,7 +6,7 @@ import os, re, ipdb
 
 from infrastructure.github.git_retriever import GithubRetriever
 from infrastructure.repositories.llm.pr_summary import PRSummaryChainService
-from infrastructure.models.prompts import CODE_REVIEW_PROMPT
+from infrastructure.models.prompts import CodeReviewPrompts
 from infrastructure.models.llm_gpt import GPT35Model
 
 load_dotenv('/Users/qoala/Desktop/services/ai-service/.env')
@@ -64,10 +64,11 @@ class PullRequestService:
     
     def generate_comment(self, llm, pr_details):
         code_reviews = []
+        prompts = CodeReviewPrompts()
         for file in pr_details['files_changed']:
             review = LLMChain(
                 llm=llm,
-                prompt=CODE_REVIEW_PROMPT
+                prompt=prompts.CODE_REVIEW_PROMPT
             ).run(code_diff=file.patch)
 
             for line in review.splitlines():
