@@ -1,15 +1,13 @@
 from github import Github
 from langchain.chains import LLMChain
-from langchain.prompts import PromptTemplate
 from langchain.chat_models.base import BaseChatModel
-from langchain.chat_models import ChatOpenAI
-from functools import lru_cache
 from dotenv import load_dotenv
 import os, re
 
 from infrastructure.github.git_retriever import GithubRetriever
 from infrastructure.repositories.llm.pr_summary import PRSummaryChain
 from infrastructure.models.prompts import CODE_REVIEW_PROMPT
+from infrastructure.models.llm_gpt import GPT35Model
 
 load_dotenv('/Users/qoala/Desktop/services/ai-service/.env')
 
@@ -82,14 +80,14 @@ class PullRequestService:
 
         # Initialize and run the summary chain
         pr_summary_chain = PRSummaryChain(
-            code_summary_llm=load_gpt_llm(), 
-            pr_summary_llm=load_gpt_llm()
+            code_summary_llm=GPT35Model().load_llm(), 
+            pr_summary_llm=GPT35Model().load_llm()
         )
         summary = pr_summary_chain.run(pr_details)
         print(summary)
 
         # Initialize and run the code review chain
-        code_review_chain = CodeReviewChain(llm=load_gpt_llm())
+        code_review_chain = CodeReviewChain(GPT35Model().load_llm())
         reviews = code_review_chain.run(pr_details)
         print(reviews)
         # Generate the final report
@@ -115,19 +113,3 @@ class PullRequestService:
                 )
                 retriever.add_commented_line(file_path, line_number)
         return reporter.report()
-
-@lru_cache(maxsize=1)
-def load_gpt_llm() -> BaseChatModel:
-    llm = ChatOpenAI(
-        api_key=os.getenv("OPENAI_API_KEY"),
-        model="gpt-3.5-turbo",
-    )
-    return llm
-
-@lru_cache(maxsize=1)
-def load_gpt4_llm():
-    llm = ChatOpenAI(
-        api_key=os.getenv("OPENAI_API_KEY"),
-        model="gpt-4",
-    )
-    return llm

@@ -1,13 +1,14 @@
 from dependency_injector import containers, providers
-from services.pull_requests import PullRequestService, load_gpt_llm, load_gpt4_llm
+from services.pull_requests import PullRequestService
+from infrastructure.models.llm_gpt import GPT35Model, GPT4oModel
 
 class Container(containers.DeclarativeContainer):
     wiring_config = containers.WiringConfiguration(packages=["api.routers"])
 
     # LLM Providers
-    code_summary_llm = providers.Singleton(load_gpt_llm)
-    pr_summary_llm = providers.Singleton(load_gpt_llm)
-    review_llm = providers.Singleton(load_gpt_llm)
+    code_summary_llm = providers.Singleton(GPT35Model().load_llm)
+    pr_summary_llm = providers.Singleton(GPT35Model().load_llm)
+    review_llm = providers.Singleton(GPT4oModel().load_llm)
 
     # Services
     pr_service = providers.Factory(
