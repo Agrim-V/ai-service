@@ -2,7 +2,8 @@ from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 
 from infrastructure.models.prompts import PR_SUMMARY_PROMPT, CODE_SUMMARY_PROMPT
-class PRSummaryChain:
+
+class PRSummaryChainService:
     def __init__(self, code_summary_llm, pr_summary_llm):
         self.code_summary_llm = code_summary_llm
         self.pr_summary_llm = pr_summary_llm

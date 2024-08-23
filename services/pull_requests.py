@@ -2,10 +2,10 @@ from github import Github
 from langchain.chains import LLMChain
 from langchain.chat_models.base import BaseChatModel
 from dotenv import load_dotenv
-import os, re
+import os, re, ipdb
 
 from infrastructure.github.git_retriever import GithubRetriever
-from infrastructure.repositories.llm.pr_summary import PRSummaryChain
+from infrastructure.repositories.llm.pr_summary import PRSummaryChainService
 from infrastructure.models.prompts import CODE_REVIEW_PROMPT
 from infrastructure.models.llm_gpt import GPT35Model
 
@@ -40,27 +40,6 @@ class CodeReviewChain:
                     code_reviews.append({"file_path": file.filename, "comments": comments})
         return {"code_reviews": code_reviews}
 
-class PullRequestReporter:
-    def __init__(self, pr_summary, code_summaries, pull_request, code_reviews):
-        self.pr_summary = pr_summary
-        self.code_summaries = code_summaries
-        self.pull_request = pull_request
-        self.code_reviews = code_reviews
-
-    def report(self):
-        report = f"### Pull Request Summary\n\n{self.pr_summary}\n\n"
-        report += "### Code Summaries\n\n"
-        for summary in self.code_summaries:
-            report += f"{summary}\n\n"
-        report += "### Code Reviews\n\n"
-        print(self.code_reviews)
-        for review in self.code_reviews:
-            for comment in review['comments']:
-                line_number = comment['line_number']
-                comment_text = comment['comment']
-                report += f"Line number: {line_number}\nComment: {comment_text}\n\n"
-        return report
-
 class PullRequestService:
     def __init__(self, owner: str, repo: str, pr_number: int, github_token: str,
                  code_summary_llm: BaseChatModel, pr_summary_llm: BaseChatModel, review_llm: BaseChatModel):
@@ -79,7 +58,7 @@ class PullRequestService:
         print(pr_details)
 
         # Initialize and run the summary chain
-        pr_summary_chain = PRSummaryChain(
+        pr_summary_chain = PRSummaryChainService(
             code_summary_llm=GPT35Model().load_llm(), 
             pr_summary_llm=GPT35Model().load_llm()
         )
@@ -90,14 +69,7 @@ class PullRequestService:
         code_review_chain = CodeReviewChain(GPT35Model().load_llm())
         reviews = code_review_chain.run(pr_details)
         print(reviews)
-        # Generate the final report
-        reporter = PullRequestReporter(
-            pr_summary=summary["pr_summary"],
-            code_summaries=summary["code_summaries"],
-            pull_request=retriever.pull_request,
-            code_reviews=reviews["code_reviews"]
-        )
-        print(reporter.report())
+        
         # Optionally, post comments inline
         for review in reviews["code_reviews"]:
             for comment in review["comments"]:
@@ -112,4 +84,25 @@ class PullRequestService:
                     position=line_number
                 )
                 retriever.add_commented_line(file_path, line_number)
-        return reporter.report()
+        
+        return self.report(
+            pr_summary=summary["pr_summary"],
+            code_summaries=summary["code_summaries"],
+            pull_request=retriever.pull_request,
+            code_reviews=reviews["code_reviews"]
+        )
+        
+
+    def report(self, pr_summary, code_summaries, pull_request, code_reviews):
+        report = f"### Pull Request Summary\n\n{pr_summary}\n\n"
+        report += "### Code Summaries\n\n"
+        for summary in code_summaries:
+            report += f"{summary}\n\n"
+        report += "### Code Reviews\n\n"
+        print(code_reviews)
+        for review in code_reviews:
+            for comment in review['comments']:
+                line_number = comment['line_number']
+                comment_text = comment['comment']
+                report += f"Line number: {line_number}\nComment: {comment_text}\n\n"
+        return report
