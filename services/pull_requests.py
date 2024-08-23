@@ -11,35 +11,6 @@ from infrastructure.models.llm_gpt import GPT35Model
 
 load_dotenv('/Users/qoala/Desktop/services/ai-service/.env')
 
-class CodeReviewChain:
-    def __init__(self, llm):
-        self.llm = llm
-
-    def run(self, pr_details):
-        code_reviews = []
-        for file in pr_details['files_changed']:
-            review = LLMChain(
-                llm=self.llm,
-                prompt=CODE_REVIEW_PROMPT
-            ).run(code_diff=file.patch)
-
-            for line in review.splitlines():
-                pattern = r'^- Line (\d+): (.*)$'
-    
-                match = re.match(pattern, line)
-                if match:
-                    # Extract line number and comment from the match
-                    line_number = int(match.group(1))
-                    comment = match.group(2)
-
-                    comments = [{
-                        "file_path": file.filename,
-                        "line_number": line_number,
-                        "comment": comment.strip()
-                    }]
-                    code_reviews.append({"file_path": file.filename, "comments": comments})
-        return {"code_reviews": code_reviews}
-
 class PullRequestService:
     def __init__(self, owner: str, repo: str, pr_number: int, github_token: str,
                  code_summary_llm: BaseChatModel, pr_summary_llm: BaseChatModel, review_llm: BaseChatModel):
@@ -66,8 +37,7 @@ class PullRequestService:
         print(summary)
 
         # Initialize and run the code review chain
-        code_review_chain = CodeReviewChain(GPT35Model().load_llm())
-        reviews = code_review_chain.run(pr_details)
+        reviews = self.generate_comment(GPT35Model().load_llm(), pr_details)
         print(reviews)
         
         # Optionally, post comments inline
@@ -91,7 +61,31 @@ class PullRequestService:
             pull_request=retriever.pull_request,
             code_reviews=reviews["code_reviews"]
         )
-        
+    
+    def generate_comment(self, llm, pr_details):
+        code_reviews = []
+        for file in pr_details['files_changed']:
+            review = LLMChain(
+                llm=llm,
+                prompt=CODE_REVIEW_PROMPT
+            ).run(code_diff=file.patch)
+
+            for line in review.splitlines():
+                pattern = r'^- Line (\d+): (.*)$'
+    
+                match = re.match(pattern, line)
+                if match:
+                    # Extract line number and comment from the match
+                    line_number = int(match.group(1))
+                    comment = match.group(2)
+
+                    comments = [{
+                        "file_path": file.filename,
+                        "line_number": line_number,
+                        "comment": comment.strip()
+                    }]
+                    code_reviews.append({"file_path": file.filename, "comments": comments})
+        return {"code_reviews": code_reviews} 
 
     def report(self, pr_summary, code_summaries, pull_request, code_reviews):
         report = f"### Pull Request Summary\n\n{pr_summary}\n\n"

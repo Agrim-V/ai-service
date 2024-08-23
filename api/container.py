@@ -2,8 +2,14 @@ from dependency_injector import containers, providers
 from services.pull_requests import PullRequestService
 from infrastructure.models.llm_gpt import GPT35Model, GPT4oModel
 
+import ipdb
+
 class Container(containers.DeclarativeContainer):
     wiring_config = containers.WiringConfiguration(packages=["api.routers"])
+
+    config = providers.Configuration(yaml_files=["config.yml"])
+    print(config.db.url)
+    # ipdb.set_trace()
 
     # LLM Providers
     code_summary_llm = providers.Singleton(GPT35Model().load_llm)
